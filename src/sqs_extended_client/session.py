@@ -92,7 +92,7 @@ def _set_receipt_handle(self, receipt_handle):
   self.meta.data['ReceiptHandle'] = receipt_handle
 
 
-def _is_large_message(self, attributes, body):
+def _is_large_message(self, attributes, encoded_body):
   total = 0
   for key, value in attributes.items():
     total = total + len(key.encode())
@@ -102,21 +102,21 @@ def _is_large_message(self, attributes, body):
       total = total + len(value['StringValue'].encode())
     if 'BinaryValue' in value:
       total = total + len(value['BinaryValue'])
-  total = total + len(body.encode())
+  total = total + len(encoded_body)
   return self.message_size_threshold < total
 
 
 def _store_in_s3(self, queue_url, message_attributes, message_body):
-  if self.large_payload_support and (self.always_through_s3 or self._is_large_message(message_attributes, message_body)):
+  encoded_body = message_body.encode()
+  if self.large_payload_support and (self.always_through_s3 or self._is_large_message(message_attributes, encoded_body)):
     message_attributes[RESERVED_ATTRIBUTE_NAME] = {}
     message_attributes[RESERVED_ATTRIBUTE_NAME]['DataType'] = 'Number'
-    message_attributes[RESERVED_ATTRIBUTE_NAME]['StringValue'] = str(len(message_body.encode()))
-    body = message_body.encode()
+    message_attributes[RESERVED_ATTRIBUTE_NAME]['StringValue'] = str(len(encoded_body))
     s3_key = str(uuid4())
     self.s3.Object(self.large_payload_support, s3_key).put(
       ACL='private',
-      Body=body,
-      ContentLength=len(body)
+      Body=encoded_body,
+      ContentLength=len(encoded_body)
     )
     message_body = jsondumps({MESSAGE_POINTER_CLASS: {'s3BucketName': self.large_payload_support, 's3Key': s3_key}}, separators=(',', ':'))
   return message_attributes, message_body
