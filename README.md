@@ -35,10 +35,10 @@ import sqs_extended_client
 
 sqs = boto3.client('sqs')
 sqs.large_payload_support = 'my-bucket-name'
-sqs.messsage_size_threshold = 65536
+sqs.message_size_threshold = 65536
 ```
 Arguments:
-* messsage_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than 0 or greater than 262144
+* message_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than 0 or greater than 262144
 
 ### Enabling support for large payloads for all messages
 ```python

@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='sqs-extended-client',
-    version='0.0.3',
+    version='0.0.4',
     description='AWS SQS extended client functionality from amazon-sqs-java-extended-client-lib',
     author='Joseph Wortmann',
     author_email='jwortmann@quinovas.com',
