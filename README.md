@@ -4,7 +4,7 @@
 
 ## Installation
 ```
-pip install sqs_extended_client
+pip install sqs-extended-client
 ```
 
 
