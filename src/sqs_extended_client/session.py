@@ -6,12 +6,12 @@ import re
 from uuid import uuid4
 
 
-RESERVED_ATTRIBUTE_NAME = 'SQSLargePayloadSize'
-MESSAGE_POINTER_CLASS = 'com.amazon.sqs.javamessaging.MessageS3Pointer'
 DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144
+MESSAGE_POINTER_CLASS = 'com.amazon.sqs.javamessaging.MessageS3Pointer'
+RECEIPT_HANDLER_MATCHER = re.compile(r"^-\.\.s3BucketName\.\.-(.*)-\.\.s3BucketName\.\.--\.\.s3Key\.\.-(.*)-\.\.s3Key\.\.-(.*)")
+RESERVED_ATTRIBUTE_NAME = 'SQSLargePayloadSize'
 S3_BUCKET_NAME_MARKER = "-..s3BucketName..-"
 S3_KEY_MARKER = "-..s3Key..-"
-RECEIPT_HANDLER_MATCHER = re.compile(r"^-\.\.s3BucketName\.\.-(.*)-\.\.s3BucketName\.\.--\.\.s3Key\.\.-(.*)-\.\.s3Key\.\.-(.*)")
 
 
 def _delete_large_payload_support(self):
@@ -106,7 +106,7 @@ def _is_large_message(self, attributes, body):
   return self.message_size_threshold < total
 
 
-def _store_in_s3(self, message_attributes, message_body):
+def _store_in_s3(self, queue_url, message_attributes, message_body):
   if self.large_payload_support and (self.always_through_s3 or self._is_large_message(message_attributes, message_body)):
     message_attributes[RESERVED_ATTRIBUTE_NAME] = {}
     message_attributes[RESERVED_ATTRIBUTE_NAME]['DataType'] = 'Number'
@@ -242,7 +242,8 @@ def _delete_message_batch_decorator(func):
 
 def _send_message_decorator(func):
   def _send_message(*args, **kwargs):
-    kwargs['MessageAttributes'], kwargs['MessageBody'] = _store_in_s3(args[0], kwargs.get('MessageAttributes', {}), kwargs['MessageBody'])
+    queue_url = kwargs.get('QueueUrl') if 'QueueUrl' in kwargs else args[0].url
+    kwargs['MessageAttributes'], kwargs['MessageBody'] = _store_in_s3(args[0], queue_url, kwargs.get('MessageAttributes', {}), kwargs['MessageBody'])
     return func(*args, **kwargs)
   return _send_message
 
@@ -250,11 +251,13 @@ def _send_message_decorator(func):
 def _send_message_batch_decorator(func):
   def _send_message_batch(*args, **kwargs):
     entries = kwargs['Entries']
-    iterables = [ [ None for _ in range(len(entries)) ] for _ in range(3) ]
+    queue_url = kwargs.get('QueueUrl') if 'QueueUrl' in kwargs else args[0].url
+    iterables = [ [ None for _ in range(len(entries)) ] for _ in range(4) ]
     for index in range(len(entries)):
       iterables[0][index] = args[0]
-      iterables[1][index] = entries[index].get('MessageAttributes', {})
-      iterables[2][index] = entries[index]['MessageBody']
+      iterables[1][index] = queue_url
+      iterables[2][index] = entries[index].get('MessageAttributes', {})
+      iterables[3][index] = entries[index]['MessageBody']
     with ThreadPoolExecutor(max_workers=len(entries)) as executor:
       message_attributes_bodies = list(executor.map(_store_in_s3, *iterables))
     for index in range(len(entries)):
