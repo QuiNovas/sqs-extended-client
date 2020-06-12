@@ -82,14 +82,14 @@ def _set_message_attributes(self, message_attributes):
   self.meta.data['MessageAttributes'] = message_attributes
 
 
-def _Queue(self):
-  return getattr(self, '_origin_queue')
-
-
 def _set_receipt_handle(self, receipt_handle):
   assert isinstance(receipt_handle, str)
   setattr(self, '_receipt_handle', receipt_handle)
   self.meta.data['ReceiptHandle'] = receipt_handle
+
+
+def _Queue(self):
+  return getattr(self, '_origin_queue')
 
 
 def _is_large_message(self, attributes, encoded_body):
@@ -106,6 +106,14 @@ def _is_large_message(self, attributes, encoded_body):
   return self.message_size_threshold < total
 
 
+def _create_s3_put_object_params(self, encoded_body, queue_url):
+  return {
+    'ACL': 'private',
+    'Body': encoded_body,
+    'ContentLength': len(encoded_body)
+  }
+
+
 def _store_in_s3(self, queue_url, message_attributes, message_body):
   encoded_body = message_body.encode()
   if self.large_payload_support and (self.always_through_s3 or self._is_large_message(message_attributes, encoded_body)):
@@ -113,29 +121,27 @@ def _store_in_s3(self, queue_url, message_attributes, message_body):
     message_attributes[RESERVED_ATTRIBUTE_NAME]['DataType'] = 'Number'
     message_attributes[RESERVED_ATTRIBUTE_NAME]['StringValue'] = str(len(encoded_body))
     s3_key = str(uuid4())
-    self.s3.Object(self.large_payload_support, s3_key).put(
-      ACL='private',
-      Body=encoded_body,
-      ContentLength=len(encoded_body)
-    )
-    message_body = jsondumps({MESSAGE_POINTER_CLASS: {'s3BucketName': self.large_payload_support, 's3Key': s3_key}}, separators=(',', ':'))
+    self.s3.Object(self.large_payload_support, s3_key).put(**self._create_s3_put_object_params(encoded_body, queue_url))
+    message_body = jsondumps([MESSAGE_POINTER_CLASS, {'s3BucketName': self.large_payload_support, 's3Key': s3_key}], separators=(',', ':'))
   return message_attributes, message_body
 
 
 def _retrieve_from_s3(self, message_attributes, message_body, receipt_handle):
   if (message_attributes.pop(RESERVED_ATTRIBUTE_NAME, None)):
-    payload = jsonloads(message_body)[MESSAGE_POINTER_CLASS]
-    s3_bucket_name = payload['s3BucketName']
-    s3_key = payload['s3Key']
-    message_body = self.s3.Object(s3_bucket_name, s3_key).get()['Body'].read().decode()
-    receipt_handle_params = {
-      'S3_BUCKET_NAME_MARKER': S3_BUCKET_NAME_MARKER,
-      'bucket': s3_bucket_name,
-      'S3_KEY_MARKER': S3_KEY_MARKER,
-      'key': s3_key,
-      'receipt_handle': receipt_handle
-    }
-    receipt_handle = '{S3_BUCKET_NAME_MARKER}{bucket}{S3_BUCKET_NAME_MARKER}{S3_KEY_MARKER}{key}{S3_KEY_MARKER}{receipt_handle}'.format(**receipt_handle_params)
+    s3_message_body = jsonloads(message_body)
+    if isinstance(s3_message_body, list) and len(s3_message_body) == 2 and s3_message_body[0] == MESSAGE_POINTER_CLASS:
+      payload = jsonloads(message_body)[1]
+      s3_bucket_name = payload['s3BucketName']
+      s3_key = payload['s3Key']
+      message_body = self.s3.Object(s3_bucket_name, s3_key).get()['Body'].read().decode()
+      receipt_handle_params = {
+        'S3_BUCKET_NAME_MARKER': S3_BUCKET_NAME_MARKER,
+        'bucket': s3_bucket_name,
+        'S3_KEY_MARKER': S3_KEY_MARKER,
+        'key': s3_key,
+        'receipt_handle': receipt_handle
+      }
+      receipt_handle = '{S3_BUCKET_NAME_MARKER}{bucket}{S3_BUCKET_NAME_MARKER}{S3_KEY_MARKER}{key}{S3_KEY_MARKER}{receipt_handle}'.format(**receipt_handle_params)
   return message_attributes, message_body, receipt_handle
 
 
@@ -160,7 +166,10 @@ def _add_custom_attributes(class_attributes):
     _set_s3,
     _delete_s3
   )
+  class_attributes['_create_s3_put_object_params'] = _create_s3_put_object_params
   class_attributes['_is_large_message'] = _is_large_message
+  class_attributes['_retrieve_from_s3'] = _retrieve_from_s3
+  class_attributes['_store_in_s3'] = _store_in_s3
 
 
 def _add_client_custom_attributes(base_classes, **kwargs):
@@ -243,7 +252,7 @@ def _delete_message_batch_decorator(func):
 def _send_message_decorator(func):
   def _send_message(*args, **kwargs):
     queue_url = kwargs.get('QueueUrl') if 'QueueUrl' in kwargs else args[0].url
-    kwargs['MessageAttributes'], kwargs['MessageBody'] = _store_in_s3(args[0], queue_url, kwargs.get('MessageAttributes', {}), kwargs['MessageBody'])
+    kwargs['MessageAttributes'], kwargs['MessageBody'] = args[0]._store_in_s3(queue_url, kwargs.get('MessageAttributes', {}), kwargs['MessageBody'])
     return func(*args, **kwargs)
   return _send_message
 
@@ -252,17 +261,16 @@ def _send_message_batch_decorator(func):
   def _send_message_batch(*args, **kwargs):
     entries = kwargs['Entries']
     queue_url = kwargs.get('QueueUrl') if 'QueueUrl' in kwargs else args[0].url
-    iterables = [ [ None for _ in range(len(entries)) ] for _ in range(4) ]
+    iterables = [ [ None for _ in range(len(entries)) ] for _ in range(3) ]
     for index in range(len(entries)):
-      iterables[0][index] = args[0]
-      iterables[1][index] = queue_url
-      iterables[2][index] = entries[index].get('MessageAttributes', {})
-      iterables[3][index] = entries[index]['MessageBody']
+      iterables[0][index] = queue_url
+      iterables[1][index] = entries[index].get('MessageAttributes', {})
+      iterables[2][index] = entries[index]['MessageBody']
     with ThreadPoolExecutor(max_workers=len(entries)) as executor:
-      message_attributes_bodies = list(executor.map(_store_in_s3, *iterables))
+      store_results = list(executor.map(args[0]._store_in_s3, *iterables))
     for index in range(len(entries)):
-      entries[index]['MessageAttributes'] = message_attributes_bodies[index][0]
-      entries[index]['MessageBody'] = message_attributes_bodies[index][1]
+      entries[index]['MessageAttributes'] = store_results[index][0]
+      entries[index]['MessageBody'] = store_results[index][1]
     return func(*args, **kwargs)
   return _send_message_batch
 
@@ -278,18 +286,17 @@ def _receive_message_decorator(func):
     response = func(*args, **kwargs)
     messages = response.get('Messages', [])
     if messages:
-      iterables = [ [ None for _ in range(len(messages)) ] for _ in range(4) ]
+      iterables = [ [ None for _ in range(len(messages)) ] for _ in range(3) ]
       for index in range(len(messages)):
-        iterables[0][index] = args[0]
-        iterables[1][index] = messages[index].get('MessageAttributes', {})
-        iterables[2][index] = messages[index]['Body']
-        iterables[3][index] = messages[index]['ReceiptHandle']
+        iterables[0][index] = messages[index].get('MessageAttributes', {})
+        iterables[1][index] = messages[index]['Body']
+        iterables[2][index] = messages[index]['ReceiptHandle']
       with ThreadPoolExecutor(max_workers=len(messages)) as executor:
-        message_attributes_bodies = list(executor.map(_retrieve_from_s3, *iterables))
+        retrieve_results = list(executor.map(args[0]._retrieve_from_s3, *iterables))
       for index in range(len(messages)):
-        messages[index]['MessageAttributes'] = message_attributes_bodies[index][0]
-        messages[index]['Body'] = message_attributes_bodies[index][1]
-        messages[index]['ReceiptHandle'] = message_attributes_bodies[index][2]
+        messages[index]['MessageAttributes'] = retrieve_results[index][0]
+        messages[index]['Body'] = retrieve_results[index][1]
+        messages[index]['ReceiptHandle'] = retrieve_results[index][2]
     return response
   return _receive_message
 
@@ -306,17 +313,15 @@ def _receive_messages_decorator(func):
     if messages:
       iterables = [ [ None for _ in range(len(messages)) ] for _ in range(4) ]
       for index in range(len(messages)):
-        iterables[0][index] = args[0]
-        message_attributes = messages[index].message_attributes
-        iterables[1][index] = message_attributes if message_attributes else {}
-        iterables[2][index] = messages[index].body
-        iterables[3][index] = messages[index].receipt_handle
+        iterables[0][index] = messages[index].message_attributes or {}
+        iterables[1][index] = messages[index].body
+        iterables[2][index] = messages[index].receipt_handle
       with ThreadPoolExecutor(max_workers=len(messages)) as executor:
-        message_attributes_bodies = list(executor.map(_retrieve_from_s3, *iterables))
+        retrieve_results = list(executor.map(args[0]._retrieve_from_s3, *iterables))
       for index in range(len(messages)):
-        messages[index].message_attributes = message_attributes_bodies[index][0]
-        messages[index].body = message_attributes_bodies[index][1]
-        messages[index].receipt_handle = message_attributes_bodies[index][2]
+        messages[index].message_attributes = retrieve_results[index][0]
+        messages[index].body = retrieve_results[index][1]
+        messages[index].receipt_handle = retrieve_results[index][2]
         setattr(messages[index], '_origin_queue', args[0])
     return messages
   return _receive_messages
