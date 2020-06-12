@@ -271,7 +271,9 @@ def _receive_message_decorator(func):
   def _receive_message(*args, **kwargs):
     if 'MessageAttributeNames' not in kwargs:
       kwargs['MessageAttributeNames'] = []
-    if RESERVED_ATTRIBUTE_NAME not in kwargs['MessageAttributeNames']:
+    assert isinstance(kwargs['MessageAttributeNames'], list), 'MessageAttributeNames must be a list'
+    if RESERVED_ATTRIBUTE_NAME not in kwargs['MessageAttributeNames'] and \
+        not ('All' in kwargs['MessageAttributeNames'] or '.*' in kwargs['MessageAttributeNames']):
       kwargs['MessageAttributeNames'].append(RESERVED_ATTRIBUTE_NAME)
     response = func(*args, **kwargs)
     messages = response.get('Messages', [])
@@ -296,7 +298,9 @@ def _receive_messages_decorator(func):
   def _receive_messages(*args, **kwargs):
     if 'MessageAttributeNames' not in kwargs:
       kwargs['MessageAttributeNames'] = []
-    if RESERVED_ATTRIBUTE_NAME not in kwargs['MessageAttributeNames']:
+    assert isinstance(kwargs['MessageAttributeNames'], list), 'MessageAttributeNames must be a list'
+    if RESERVED_ATTRIBUTE_NAME not in kwargs['MessageAttributeNames'] and \
+        not ('All' in kwargs['MessageAttributeNames'] or '.*' in kwargs['MessageAttributeNames']):
       kwargs['MessageAttributeNames'].append(RESERVED_ATTRIBUTE_NAME)
     messages = func(*args, **kwargs)
     if messages:
