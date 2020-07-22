@@ -17,13 +17,23 @@ To do this, this library automatically extends the normal boto3 SQS client and Q
 
 # Usage
 
+### Note
+The s3 bucket must already exist prior to usage, and be accessible by whatever credentials you have available
+
+
 ### Enabling support for large payloads (>256Kb)
+
 ```python
 import boto3
 import sqs_extended_client
 
+# Low level client
 sqs = boto3.client('sqs')
 sqs.large_payload_support = 'my-bucket-name'
+
+# boto resource
+resource = boto3.resource('sqs')
+resource.meta.client.large_payload_support = 'my-bucket-name'
 ```
 Arguments:
 * large_payload_support -- the S3 bucket name that will store large messages.
@@ -33,9 +43,15 @@ Arguments:
 import boto3
 import sqs_extended_client
 
+# Low level client
 sqs = boto3.client('sqs')
 sqs.large_payload_support = 'my-bucket-name'
 sqs.message_size_threshold = 65536
+
+# boto resource
+resource = boto3.resource('sqs')
+resource.meta.client.large_payload_support = 'my-bucket-name'
+resource.meta.client.message_size_threshold = 65536
 ```
 Arguments:
 * message_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than 0 or greater than 262144
@@ -45,9 +61,15 @@ Arguments:
 import boto3
 import sqs_extended_client
 
+# Low level client
 sqs = boto3.client('sqs')
 sqs.large_payload_support = 'my-bucket-name'
 sqs.always_through_s3 = True
+
+# boto resource
+resource = boto3.resource('sqs')
+resource.meta.client.large_payload_support = 'my-bucket-name'
+resource.meta.client.always_through_s3 = True
 ```
 Arguments:
 * always_through_s3 -- if True, then all messages will be serialized to S3.
