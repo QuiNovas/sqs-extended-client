@@ -33,7 +33,12 @@ sqs.large_payload_support = 'my-bucket-name'
 
 # boto resource
 resource = boto3.resource('sqs')
-resource.meta.client.large_payload_support = 'my-bucket-name'
+queue = resource.Queue('queue-url')
+
+# Or
+queue = resource.create_queue(QueueName='queue-name')
+
+queue.large_payload_support = 'my-bucket-name'
 ```
 Arguments:
 * large_payload_support -- the S3 bucket name that will store large messages.
@@ -50,8 +55,13 @@ sqs.message_size_threshold = 65536
 
 # boto resource
 resource = boto3.resource('sqs')
-resource.meta.client.large_payload_support = 'my-bucket-name'
-resource.meta.client.message_size_threshold = 65536
+queue = resource.Queue('queue-url')
+
+# Or
+queue = resource.create_queue(QueueName='queue-name')
+
+queue.large_payload_support = 'my-bucket-name'
+queue.message_size_threshold = 65536
 ```
 Arguments:
 * message_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than 0 or greater than 262144
@@ -68,8 +78,13 @@ sqs.always_through_s3 = True
 
 # boto resource
 resource = boto3.resource('sqs')
-resource.meta.client.large_payload_support = 'my-bucket-name'
-resource.meta.client.always_through_s3 = True
+queue = resource.Queue('queue-url')
+
+# Or
+queue = resource.create_queue(QueueName='queue-name')
+
+queue.large_payload_support = 'my-bucket-name'
+queue.always_through_s3 = True
 ```
 Arguments:
 * always_through_s3 -- if True, then all messages will be serialized to S3.
