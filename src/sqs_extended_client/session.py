@@ -311,7 +311,7 @@ def _receive_messages_decorator(func):
       kwargs['MessageAttributeNames'].append(RESERVED_ATTRIBUTE_NAME)
     messages = func(*args, **kwargs)
     if messages:
-      iterables = [ [ None for _ in range(len(messages)) ] for _ in range(4) ]
+      iterables = [ [ None for _ in range(len(messages)) ] for _ in range(3) ]
       for index in range(len(messages)):
         iterables[0][index] = messages[index].message_attributes or {}
         iterables[1][index] = messages[index].body
