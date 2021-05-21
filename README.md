@@ -15,17 +15,16 @@ interoperable with that library.
 
 To do this, this library automatically extends the normal boto3 SQS client and Queue resource classes upon import using the [botoinator](https://github.com/QuiNovas/botoinator) library. This allows for further extension or decoration if desired.
 
-# Usage
-
-### Note
-The s3 bucket must already exist prior to usage, and be accessible by whatever credentials you have available
-
-Additional attributes available on `boto3` SQS `client` and `Queue` objects:
+## Additional attributes available on `boto3` SQS `client` and `Queue` objects
 * large_payload_support -- the S3 bucket name that will store large messages.
 * message_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than `0` or greater than `262144`. Defaults to `262144`.
 * always_through_s3 -- if `True`, then all messages will be serialized to S3. Defaults to `False`
 * s3 -- the boto3 S3 `resource` object to use to store objects to S3. Use this if you want to control the S3 resource (for example, custom S3 config or credentials). Defaults to `boto3.resource("s3")` on first use if not previously set.
 
+## Usage
+
+#### Note:
+> The s3 bucket must already exist prior to usage, and be accessible by whatever credentials you have available
 
 ### Enabling support for large payloads (>256Kb)
 
