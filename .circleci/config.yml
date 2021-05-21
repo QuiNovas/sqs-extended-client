@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
     steps:
       - checkout
       - run: python setup.py sdist bdist_wheel
@@ -12,7 +12,7 @@ jobs:
             - sqs*
   upload:
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
     steps:
       - run: sudo pip install twine
       - attach_workspace:
