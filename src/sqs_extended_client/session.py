@@ -326,6 +326,14 @@ def _receive_messages_decorator(func):
     return messages
   return _receive_messages
 
+
+def _change_message_visibility_decorator(func):
+  def _change_message_visibility(*args, **kwargs):
+    match = RECEIPT_HANDLER_MATCHER.match(kwargs['ReceiptHandle'])
+    if match:
+      kwargs['ReceiptHandle'] = match.group(3)
+    return func(*args, **kwargs)
+  return _change_message_visibility
  
 class SQSExtendedClientSession(botoinator.session.DecoratedSession):
 
@@ -349,6 +357,7 @@ class SQSExtendedClientSession(botoinator.session.DecoratedSession):
     self.register_client_decorator('sqs', 'send_message', _send_message_decorator)
     self.register_client_decorator('sqs', 'send_message_batch', _send_message_batch_decorator)
     self.register_client_decorator('sqs', 'receive_message', _receive_message_decorator)
+    self.register_client_decorator('sqs', 'change_message_visibility', _change_message_visibility_decorator)
     self.register_resource_decorator('sqs', 'Queue', 'delete_messages', _delete_message_batch_decorator)
     self.register_resource_decorator('sqs', 'Queue', 'send_message', _send_message_decorator)
     self.register_resource_decorator('sqs', 'Queue', 'send_messages', _send_message_batch_decorator)
