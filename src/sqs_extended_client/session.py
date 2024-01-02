@@ -7,7 +7,7 @@ from uuid import uuid4
 
 
 DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144
-MESSAGE_POINTER_CLASS = 'com.amazon.sqs.javamessaging.MessageS3Pointer'
+MESSAGE_POINTER_CLASS = 'software.amazon.payloadoffloading.PayloadS3Pointer'
 RECEIPT_HANDLER_MATCHER = re.compile(r"^-\.\.s3BucketName\.\.-(.*)-\.\.s3BucketName\.\.--\.\.s3Key\.\.-(.*)-\.\.s3Key\.\.-(.*)")
 RESERVED_ATTRIBUTE_NAME = 'SQSLargePayloadSize'
 S3_BUCKET_NAME_MARKER = "-..s3BucketName..-"
